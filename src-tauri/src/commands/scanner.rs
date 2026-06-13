@@ -610,15 +610,28 @@ pub async fn scan_all_skills_impl(pool: &DbPool) -> Result<ScanResult, String> {
                     db::upsert_skill(pool, &db_skill).await?;
 
                     // Bug fix: store the skill *directory* path, not the SKILL.md file path.
-                    let installation = SkillInstallation {
-                        skill_id: skill.id.clone(),
-                        agent_id: agent.id.clone(),
-                        installed_path: skill.dir_path.clone(),
-                        link_type: skill.link_type.clone(),
-                        symlink_target: skill.symlink_target.clone(),
-                        created_at: now.clone(),
-                    };
-                    db::upsert_skill_installation(pool, &installation).await?;
+                    // Skip installation records for non-central agents that share
+                    // the same skills directory as central (e.g. codex, cline, etc.).
+                    // These agents access the same filesystem location; creating
+                    // separate installation records would make them appear as
+                    // independently installable platforms.
+                    let central_dir = agents
+                        .iter()
+                        .find(|a| a.category == "central")
+                        .map(|a| &a.global_skills_dir);
+                    let should_skip_installation = !is_central
+                        && central_dir.is_some_and(|cd| cd == &agent.global_skills_dir);
+                    if !should_skip_installation {
+                        let installation = SkillInstallation {
+                            skill_id: skill.id.clone(),
+                            agent_id: agent.id.clone(),
+                            installed_path: skill.dir_path.clone(),
+                            link_type: skill.link_type.clone(),
+                            symlink_target: skill.symlink_target.clone(),
+                            created_at: now.clone(),
+                        };
+                        db::upsert_skill_installation(pool, &installation).await?;
+                    }
                 }
             }
 
