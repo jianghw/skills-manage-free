@@ -211,6 +211,7 @@ async fn canonical_dir_for_skill(
     Ok(central_root.join(skill_id))
 }
 
+#[allow(dead_code)]
 async fn existing_install_path_for_agent(
     pool: &DbPool,
     skill_id: &str,
@@ -221,22 +222,6 @@ async fn existing_install_path_for_agent(
         .into_iter()
         .find(|installation| installation.agent_id == agent_id)
         .map(|installation| installation.installed_path))
-}
-
-async fn universal_available_install_result(
-    pool: &DbPool,
-    skill_id: &str,
-    agent_id: &str,
-    canonical_dir: &Path,
-) -> Result<Option<InstallResult>, String> {
-    if !db::agent_supports_universal_agents_skills(agent_id) {
-        return Ok(None);
-    }
-
-    let symlink_path = existing_install_path_for_agent(pool, skill_id, agent_id)
-        .await?
-        .unwrap_or_else(|| canonical_dir.to_string_lossy().into_owned());
-    Ok(Some(InstallResult { symlink_path }))
 }
 
 // ─── Core Logic ───────────────────────────────────────────────────────────────
@@ -276,12 +261,6 @@ pub async fn install_skill_to_agent_impl(
 
     // 3. Ensure the skill exists in central (auto-centralize if needed).
     ensure_centralized(pool, skill_id, &canonical_dir).await?;
-
-    if let Some(result) =
-        universal_available_install_result(pool, skill_id, agent_id, &canonical_dir).await?
-    {
-        return Ok(result);
-    }
 
     // 4. Compute symlink location.
     let agent_dir = PathBuf::from(&agent.global_skills_dir);
@@ -390,12 +369,6 @@ pub async fn install_skill_to_agent_copy_impl(
     // 3. Ensure the skill exists in central (auto-centralize if needed).
     ensure_centralized(pool, skill_id, &canonical_dir).await?;
 
-    if let Some(result) =
-        universal_available_install_result(pool, skill_id, agent_id, &canonical_dir).await?
-    {
-        return Ok(result);
-    }
-
     // 4. Compute target location.
     let agent_dir = PathBuf::from(&agent.global_skills_dir);
     let target_path = agent_dir.join(skill_id);
@@ -466,9 +439,6 @@ pub async fn uninstall_skill_from_agent_impl(
     // 2. Look up the installation record to determine where and how it was installed.
     let installations = db::get_skill_installations(pool, skill_id).await?;
     let record = installations.iter().find(|r| r.agent_id == agent_id);
-    if record.is_none() && db::agent_supports_universal_agents_skills(agent_id) {
-        return Ok(());
-    }
     let install_path = record
         .map(|r| PathBuf::from(&r.installed_path))
         .unwrap_or_else(|| PathBuf::from(&agent.global_skills_dir).join(skill_id));
@@ -669,7 +639,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_install_to_universal_agent_returns_central_availability_without_link() {
+    async fn test_install_to_universal_agent_now_creates_symlink_or_copy() {
         let tmp = TempDir::new().unwrap();
         let central_dir = tmp.path().join(".agents/skills");
         let cursor_dir = tmp.path().join(".cursor/skills");
@@ -683,28 +653,28 @@ mod tests {
             .unwrap();
         create_central_skill(&central_dir, "universal-skill");
 
-        let result = install_skill_to_agent_impl(&pool, "universal-skill", "cursor")
+        let result = install_skill_to_agent_auto_impl(&pool, "universal-skill", "cursor")
             .await
             .unwrap();
 
         assert_eq!(
             result.symlink_path,
-            central_dir
+            cursor_dir
                 .join("universal-skill")
                 .to_string_lossy()
                 .into_owned()
         );
         assert!(
-            !cursor_dir.join("universal-skill").exists(),
-            "universal agents must not receive redundant links for central skills"
+            cursor_dir.join("universal-skill").exists(),
+            "cursor must now receive a symlink or copy like any other platform"
         );
         assert!(
             db::get_skill_installations(&pool, "universal-skill")
                 .await
                 .unwrap()
                 .into_iter()
-                .all(|installation| installation.agent_id != "cursor"),
-            "universal availability must not create removable installation rows"
+                .any(|installation| installation.agent_id == "cursor"),
+            "a removable installation row must be created for cursor"
         );
     }
 

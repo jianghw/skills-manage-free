@@ -621,7 +621,7 @@ fn installation_details(installations: Vec<db::SkillInstallation>) -> Vec<SkillI
 async fn read_only_agent_ids_for_skill(
     pool: &DbPool,
     skill_id: &str,
-    is_central: bool,
+    _is_central: bool,
 ) -> Result<Vec<String>, String> {
     let mut agent_ids: BTreeSet<String> =
         db::get_read_only_observed_agent_ids_for_skill(pool, skill_id)
@@ -629,13 +629,6 @@ async fn read_only_agent_ids_for_skill(
             .into_iter()
             .collect();
 
-    if is_central {
-        for agent in db::get_all_agents(pool).await? {
-            if agent.is_enabled && db::agent_supports_universal_agents_skills(&agent.id) {
-                agent_ids.insert(agent.id);
-            }
-        }
-    }
 
     for installation in db::get_skill_installations(pool, skill_id).await? {
         agent_ids.remove(&installation.agent_id);
@@ -1276,15 +1269,6 @@ mod tests {
         pool
     }
 
-    fn expected_universal_read_only_agents(extra: &[&str]) -> Vec<String> {
-        let agent_ids = db::UNIVERSAL_AGENTS_SKILLS_AGENT_IDS
-            .iter()
-            .chain(extra.iter())
-            .map(|agent_id| (*agent_id).to_string())
-            .collect::<std::collections::BTreeSet<_>>();
-        agent_ids.into_iter().collect()
-    }
-
     fn make_skill(id: &str, name: &str, is_central: bool) -> Skill {
         Skill {
             id: id.to_string(),
@@ -1572,7 +1556,7 @@ mod tests {
         );
         assert_eq!(
             skills_with_links[0].read_only_agents,
-            expected_universal_read_only_agents(&["factory-droid"])
+            vec!["factory-droid"]
         );
     }
 

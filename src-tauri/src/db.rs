@@ -583,26 +583,6 @@ async fn ensure_column(
     Ok(())
 }
 
-pub const UNIVERSAL_AGENTS_SKILLS_AGENT_IDS: &[&str] = &[
-    "amp",
-    "antigravity",
-    "cline",
-    "codex",
-    "cursor",
-    "deep-agents",
-    "dexto",
-    "firebender",
-    "gemini-cli",
-    "copilot",
-    "kimi-code-cli",
-    "opencode",
-    "warp",
-];
-
-pub fn agent_supports_universal_agents_skills(agent_id: &str) -> bool {
-    UNIVERSAL_AGENTS_SKILLS_AGENT_IDS.contains(&agent_id)
-}
-
 /// Returns the list of built-in agents using the current user's home directory.
 pub fn builtin_agents() -> Vec<Agent> {
     let home = resolve_home_dir();

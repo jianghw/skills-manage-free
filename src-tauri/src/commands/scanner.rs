@@ -64,7 +64,6 @@ impl ScanDirectoryOptions {
 enum AgentSkillSourceKind {
     User,
     Plugin,
-    Compatibility,
 }
 
 impl AgentSkillSourceKind {
@@ -72,12 +71,11 @@ impl AgentSkillSourceKind {
         match self {
             Self::User => "user",
             Self::Plugin => "plugin",
-            Self::Compatibility => "compatibility",
         }
     }
 
     fn is_read_only(self) -> bool {
-        matches!(self, Self::Plugin | Self::Compatibility)
+        matches!(self, Self::Plugin)
     }
 }
 
@@ -485,44 +483,10 @@ fn claude_plugin_roots(global_skills_dir: &Path) -> Vec<AgentScanRoot> {
     roots
 }
 
-fn agents_skills_compatibility_root(primary_root: &Path) -> Option<PathBuf> {
-    primary_root
-        .parent()
-        .and_then(Path::parent)
-        .map(|home_root| home_root.join(".agents/skills"))
-}
-
-fn compatibility_scan_root(path: PathBuf) -> AgentScanRoot {
-    AgentScanRoot {
-        path: path.clone(),
-        source_root: Some(path),
-        source_kind: Some(AgentSkillSourceKind::Compatibility),
-    }
-}
-
-fn push_unique_scan_root(roots: &mut Vec<AgentScanRoot>, root: AgentScanRoot) {
-    if roots.iter().any(|existing| existing.path == root.path) {
-        return;
-    }
-    roots.push(root);
-}
-
 fn scan_roots_for_agent(agent: &crate::db::Agent) -> Vec<AgentScanRoot> {
     let primary_root = PathBuf::from(&agent.global_skills_dir);
 
-    let compatibility_root = agents_skills_compatibility_root(&primary_root);
-    if db::agent_supports_universal_agents_skills(&agent.id)
-        && compatibility_root
-            .as_ref()
-            .is_some_and(|root| root == &primary_root)
-    {
-        return compatibility_root
-            .map(compatibility_scan_root)
-            .into_iter()
-            .collect();
-    }
-
-    let mut roots = match agent.id.as_str() {
+    let roots = match agent.id.as_str() {
         "claude-code" => {
             let mut roots = vec![AgentScanRoot {
                 path: primary_root.clone(),
@@ -538,14 +502,6 @@ fn scan_roots_for_agent(agent: &crate::db::Agent) -> Vec<AgentScanRoot> {
             source_kind: None,
         }],
     };
-
-    if agent.id == "factory-droid" || db::agent_supports_universal_agents_skills(&agent.id) {
-        if let Some(compatibility_root) = compatibility_root {
-            if compatibility_root != primary_root {
-                push_unique_scan_root(&mut roots, compatibility_scan_root(compatibility_root));
-            }
-        }
-    }
 
     roots
 }
@@ -738,7 +694,10 @@ pub async fn scan_all_skills(state: State<'_, AppState>) -> Result<ScanResult, S
 mod tests {
     use super::*;
     use std::fs;
+    #[cfg(unix)]
     use std::os::unix::fs::symlink;
+    #[cfg(windows)]
+    use std::os::windows::fs::symlink_dir as symlink;
     use tempfile::TempDir;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1754,203 +1713,6 @@ mod tests {
         let skills = db::get_skills_by_agent(&pool, "not-claude").await.unwrap();
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].id, "user-skill");
-    }
-
-    #[tokio::test]
-    async fn test_scan_all_skills_impl_factory_droid_observes_agents_skills_read_only() {
-        let tmp = TempDir::new().unwrap();
-        let pool = setup_test_db().await;
-
-        sqlx::query("DELETE FROM agents WHERE id NOT IN ('factory-droid', 'central')")
-            .execute(&pool)
-            .await
-            .unwrap();
-        sqlx::query("DELETE FROM scan_directories")
-            .execute(&pool)
-            .await
-            .unwrap();
-
-        let factory_root = tmp.path().join(".factory/skills");
-        let shared_root = tmp.path().join(".agents/skills");
-        fs::create_dir_all(&factory_root).unwrap();
-        fs::create_dir_all(&shared_root).unwrap();
-
-        create_skill_dir(
-            &shared_root.join("superpowers"),
-            "using-superpowers",
-            &valid_skill_md("Using Superpowers", "Shared Factory-compatible skill"),
-        );
-
-        sqlx::query("UPDATE agents SET global_skills_dir = ? WHERE id = 'factory-droid'")
-            .bind(factory_root.to_string_lossy().to_string())
-            .execute(&pool)
-            .await
-            .unwrap();
-        sqlx::query("UPDATE agents SET global_skills_dir = ? WHERE id = 'central'")
-            .bind(shared_root.to_string_lossy().to_string())
-            .execute(&pool)
-            .await
-            .unwrap();
-
-        let result = scan_all_skills_impl(&pool).await.unwrap();
-
-        assert_eq!(
-            result.skills_by_agent.get("factory-droid").copied(),
-            Some(1)
-        );
-        let observations = db::get_agent_skill_observations(&pool, "factory-droid")
-            .await
-            .unwrap();
-        assert_eq!(observations.len(), 1);
-        assert_eq!(observations[0].skill_id, "using-superpowers");
-        assert_eq!(observations[0].source_kind, "compatibility");
-        assert!(observations[0].is_read_only);
-        assert!(observations[0]
-            .dir_path
-            .contains("superpowers/using-superpowers"));
-
-        let platform_skills = db::get_skills_for_agent(&pool, "factory-droid")
-            .await
-            .unwrap();
-        assert_eq!(platform_skills.len(), 1);
-        assert_eq!(platform_skills[0].id, "using-superpowers");
-        assert!(platform_skills[0].is_read_only);
-
-        let factory_installations: Vec<_> = db::get_skill_installations(&pool, "using-superpowers")
-            .await
-            .unwrap()
-            .into_iter()
-            .filter(|installation| installation.agent_id == "factory-droid")
-            .collect();
-        assert!(
-            factory_installations.is_empty(),
-            "shared .agents skills must not be persisted as removable Factory Droid installs"
-        );
-
-        let skill = db::get_skill_by_id(&pool, "using-superpowers")
-            .await
-            .unwrap()
-            .expect("central scan should persist the shared skill");
-        assert!(skill.is_central);
-        assert_eq!(
-            skill.canonical_path.as_deref(),
-            Some(
-                shared_root
-                    .join("superpowers/using-superpowers")
-                    .to_string_lossy()
-                    .as_ref()
-            )
-        );
-    }
-
-    #[tokio::test]
-    async fn test_scan_all_skills_impl_universal_agent_observes_agents_skills_read_only() {
-        let tmp = TempDir::new().unwrap();
-        let pool = setup_test_db().await;
-
-        sqlx::query("DELETE FROM agents WHERE id NOT IN ('cursor', 'central')")
-            .execute(&pool)
-            .await
-            .unwrap();
-        sqlx::query("DELETE FROM scan_directories")
-            .execute(&pool)
-            .await
-            .unwrap();
-
-        let cursor_root = tmp.path().join(".cursor/skills");
-        let shared_root = tmp.path().join(".agents/skills");
-        fs::create_dir_all(&cursor_root).unwrap();
-        fs::create_dir_all(&shared_root).unwrap();
-
-        create_skill_dir(
-            &shared_root,
-            "shared-skill",
-            &valid_skill_md("Shared Skill", "Universal compatibility skill"),
-        );
-
-        sqlx::query("UPDATE agents SET global_skills_dir = ? WHERE id = 'cursor'")
-            .bind(cursor_root.to_string_lossy().to_string())
-            .execute(&pool)
-            .await
-            .unwrap();
-        sqlx::query("UPDATE agents SET global_skills_dir = ? WHERE id = 'central'")
-            .bind(shared_root.to_string_lossy().to_string())
-            .execute(&pool)
-            .await
-            .unwrap();
-
-        let result = scan_all_skills_impl(&pool).await.unwrap();
-
-        assert_eq!(result.skills_by_agent.get("cursor").copied(), Some(1));
-        let observations = db::get_agent_skill_observations(&pool, "cursor")
-            .await
-            .unwrap();
-        assert_eq!(observations.len(), 1);
-        assert_eq!(observations[0].source_kind, "compatibility");
-        assert!(observations[0].is_read_only);
-
-        let cursor_installations: Vec<_> = db::get_skill_installations(&pool, "shared-skill")
-            .await
-            .unwrap()
-            .into_iter()
-            .filter(|installation| installation.agent_id == "cursor")
-            .collect();
-        assert!(
-            cursor_installations.is_empty(),
-            "shared .agents skills must not be persisted as removable universal-agent installs"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_scan_all_skills_impl_universal_primary_agents_skills_is_read_only() {
-        let tmp = TempDir::new().unwrap();
-        let pool = setup_test_db().await;
-
-        sqlx::query("DELETE FROM agents WHERE id NOT IN ('antigravity', 'central')")
-            .execute(&pool)
-            .await
-            .unwrap();
-        sqlx::query("DELETE FROM scan_directories")
-            .execute(&pool)
-            .await
-            .unwrap();
-
-        let shared_root = tmp.path().join(".agents/skills");
-        fs::create_dir_all(&shared_root).unwrap();
-        create_skill_dir(
-            &shared_root,
-            "native-universal-skill",
-            &valid_skill_md("Native Universal Skill", "Primary root is shared"),
-        );
-
-        sqlx::query(
-            "UPDATE agents SET global_skills_dir = ? WHERE id IN ('antigravity', 'central')",
-        )
-        .bind(shared_root.to_string_lossy().to_string())
-        .execute(&pool)
-        .await
-        .unwrap();
-
-        scan_all_skills_impl(&pool).await.unwrap();
-
-        let observations = db::get_agent_skill_observations(&pool, "antigravity")
-            .await
-            .unwrap();
-        assert_eq!(observations.len(), 1);
-        assert_eq!(observations[0].source_kind, "compatibility");
-        assert!(observations[0].is_read_only);
-
-        let antigravity_installations: Vec<_> =
-            db::get_skill_installations(&pool, "native-universal-skill")
-                .await
-                .unwrap()
-                .into_iter()
-                .filter(|installation| installation.agent_id == "antigravity")
-                .collect();
-        assert!(
-            antigravity_installations.is_empty(),
-            "universal platforms that use .agents/skills as primary root must remain read-only"
-        );
     }
 
     #[tokio::test]
