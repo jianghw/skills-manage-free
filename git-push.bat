@@ -20,6 +20,24 @@ if errorlevel 1 (
     exit /b 1
 )
 
+:: --- Proxy configuration (for users behind firewall, e.g. China) -------------
+echo [INFO] Checking git proxy settings...
+git config --global --get http.proxy >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] No global git proxy configured.
+    set /p USE_PROXY="Use proxy for git operations? (http://127.0.0.1:7897) [y/N]: "
+    if /i "!USE_PROXY!"=="y" (
+        set PROXY_URL=http://127.0.0.1:7897
+        git config --global http.proxy !PROXY_URL!
+        git config --global https.proxy !PROXY_URL!
+        echo [OK] Git proxy set to !PROXY_URL!
+    )
+) else (
+    for /f "tokens=*" %%p in ('git config --global --get http.proxy') do set GIT_PROXY=%%p
+    echo [INFO] Git proxy found: !GIT_PROXY!
+    echo [INFO] To remove: git config --global --unset http.proxy ^&^& git config --global --unset https.proxy
+)
+
 :: --- Check for uncommitted changes -------------------------------------------
 git diff --quiet HEAD
 if errorlevel 1 (
