@@ -629,7 +629,6 @@ async fn read_only_agent_ids_for_skill(
             .into_iter()
             .collect();
 
-
     for installation in db::get_skill_installations(pool, skill_id).await? {
         agent_ids.remove(&installation.agent_id);
     }
@@ -1554,10 +1553,7 @@ mod tests {
             skills_with_links[0].linked_agents.is_empty(),
             "read-only compatibility observations are not removable installation links"
         );
-        assert_eq!(
-            skills_with_links[0].read_only_agents,
-            vec!["factory-droid"]
-        );
+        assert_eq!(skills_with_links[0].read_only_agents, vec!["factory-droid"]);
     }
 
     #[tokio::test]

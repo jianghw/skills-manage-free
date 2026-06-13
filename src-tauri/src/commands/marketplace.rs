@@ -115,7 +115,8 @@ async fn fetch_github_skills(
 ) -> Result<Vec<MarketplaceSkill>, String> {
     let auth = github_import::github_direct_auth_from_settings(pool).await?;
     let repo = github_import::resolve_repo_ref(url, pool, auth.as_deref()).await?;
-    let candidates = github_import::fetch_repo_skill_candidates(&repo, pool, auth.as_deref()).await?;
+    let candidates =
+        github_import::fetch_repo_skill_candidates(&repo, pool, auth.as_deref()).await?;
     Ok(marketplace_skills_from_candidates(registry_id, candidates))
 }
 
@@ -529,8 +530,7 @@ pub async fn install_marketplace_skill(
 
     // Download SKILL.md content
     let client = apply_proxy_settings(
-        reqwest::Client::builder()
-            .user_agent("skills-manage/0.9.1"),
+        reqwest::Client::builder().user_agent("skills-manage/0.9.1"),
         &state.db,
     )
     .await?

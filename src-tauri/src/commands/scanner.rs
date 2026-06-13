@@ -619,8 +619,8 @@ pub async fn scan_all_skills_impl(pool: &DbPool) -> Result<ScanResult, String> {
                         .iter()
                         .find(|a| a.category == "central")
                         .map(|a| &a.global_skills_dir);
-                    let should_skip_installation = !is_central
-                        && central_dir.is_some_and(|cd| cd == &agent.global_skills_dir);
+                    let should_skip_installation =
+                        !is_central && central_dir.is_some_and(|cd| cd == &agent.global_skills_dir);
                     if !should_skip_installation {
                         let installation = SkillInstallation {
                             skill_id: skill.id.clone(),
