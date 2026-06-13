@@ -12,6 +12,7 @@ use crate::{
     db::{self, DbPool, Skill},
     AppState,
 };
+use super::marketplace;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -262,7 +263,7 @@ pub async fn fetch_github_skill_markdown(
     state: State<'_, AppState>,
     download_url: String,
 ) -> Result<String, String> {
-    let client = github_client()?;
+    let client = github_client(&state.db).await?;
     let auth = github_direct_auth_from_settings(&state.db).await?;
     fetch_raw_text(&client, &download_url, auth.as_deref()).await
 }
@@ -272,8 +273,8 @@ async fn preview_github_repo_import_impl(
     repo_url: &str,
 ) -> Result<GitHubRepoPreview, String> {
     let auth = github_direct_auth_from_settings(pool).await?;
-    let repo = resolve_repo_ref(repo_url, auth.as_deref()).await?;
-    let candidates = fetch_repo_skill_candidates(&repo, auth.as_deref()).await?;
+    let repo = resolve_repo_ref(repo_url, pool, auth.as_deref()).await?;
+    let candidates = fetch_repo_skill_candidates(&repo, pool, auth.as_deref()).await?;
     let skills = build_preview_skills(pool, &candidates).await?;
 
     if skills.is_empty() {
@@ -306,8 +307,8 @@ async fn import_github_repo_skills_impl(
     );
 
     let auth = github_direct_auth_from_settings(pool).await?;
-    let repo = resolve_repo_ref(repo_url, auth.as_deref()).await?;
-    let client = github_client()?;
+    let repo = resolve_repo_ref(repo_url, pool, auth.as_deref()).await?;
+    let client = github_client(pool).await?;
     let snapshot = download_repo_snapshot(&client, &repo, auth.as_deref()).await?;
     let candidates = build_repo_skill_candidates_from_snapshot(&repo, &snapshot)?;
     if candidates.is_empty() {
@@ -599,10 +600,11 @@ async fn build_preview_skills(
 
 pub(crate) async fn resolve_repo_ref(
     repo_url: &str,
+    pool: &DbPool,
     auth_token: Option<&str>,
 ) -> Result<GitHubRepoRef, String> {
     let (owner, repo) = parse_github_url(repo_url)?;
-    let client = github_client()?;
+    let client = github_client(pool).await?;
     let response = send_github_request_with_fallback(
         &client,
         GitHubFetchSurface::Api,
@@ -655,11 +657,14 @@ pub(crate) async fn github_direct_auth_from_settings(
         .filter(|token| !token.is_empty()))
 }
 
-fn github_client() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
-        .user_agent("skills-manage/0.9.1")
-        .build()
-        .map_err(|e| e.to_string())
+async fn github_client(pool: &DbPool) -> Result<reqwest::Client, String> {
+    let builder = marketplace::apply_proxy_settings(
+        reqwest::Client::builder()
+            .user_agent("skills-manage/0.9.1"),
+        pool,
+    )
+    .await?;
+    builder.build().map_err(|e| e.to_string())
 }
 
 fn parse_github_url(url: &str) -> Result<(String, String), String> {
@@ -696,9 +701,10 @@ fn parse_github_url(url: &str) -> Result<(String, String), String> {
 
 pub(crate) async fn fetch_repo_skill_candidates(
     repo: &GitHubRepoRef,
+    pool: &DbPool,
     auth_token: Option<&str>,
 ) -> Result<Vec<RemoteSkillCandidate>, String> {
-    let client = github_client()?;
+    let client = github_client(pool).await?;
     let snapshot = download_repo_snapshot(&client, repo, auth_token).await?;
     build_repo_skill_candidates_from_snapshot(repo, &snapshot)
 }
@@ -1996,6 +2002,7 @@ mod tests {
             Arc, Mutex,
         };
 
+        let pool = setup_test_db().await;
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let address = listener.local_addr().expect("addr");
         let requests = Arc::new(Mutex::new(Vec::<String>::new()));
@@ -2026,7 +2033,7 @@ mod tests {
             }
         });
 
-        let client = github_client().expect("client");
+        let client = github_client(&pool).await.expect("client");
         let direct_url = format!("http://{}/direct", address);
         let mirror_url = format!("http://{}/mirror", address);
 
@@ -2078,6 +2085,7 @@ mod tests {
             Arc, Mutex,
         };
 
+        let pool = setup_test_db().await;
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let address = listener.local_addr().expect("addr");
         let requests = Arc::new(Mutex::new(Vec::<String>::new()));
@@ -2107,7 +2115,7 @@ mod tests {
             }
         });
 
-        let client = github_client().expect("client");
+        let client = github_client(&pool).await.expect("client");
         let direct_url = format!("http://{}/raw-direct", address);
         let mirror_url = format!("http://{}/raw-mirror", address);
 
@@ -2159,6 +2167,7 @@ mod tests {
             Arc, Mutex,
         };
 
+        let pool = setup_test_db().await;
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let address = listener.local_addr().expect("addr");
         let requests = Arc::new(Mutex::new(Vec::<String>::new()));
@@ -2193,7 +2202,7 @@ mod tests {
             }
         });
 
-        let client = github_client().expect("client");
+        let client = github_client(&pool).await.expect("client");
         let direct_url = format!("http://{}/direct", address);
         let mirror_url = format!("http://{}/mirror", address);
 

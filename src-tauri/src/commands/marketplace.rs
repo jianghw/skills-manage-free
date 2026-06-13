@@ -6,7 +6,37 @@ use tauri::{AppHandle, Emitter, State};
 
 use super::github_import;
 use crate::path_utils::central_skills_dir;
-use crate::AppState;
+use crate::{db, AppState};
+
+// ─── Proxy helper ──────────────────────────────────────────────────────────────
+
+/// Apply proxy settings from the DB to a reqwest ClientBuilder.
+/// Reads `proxy_enabled` and `proxy_url` settings.
+pub(crate) async fn apply_proxy_settings(
+    mut builder: reqwest::ClientBuilder,
+    pool: &db::DbPool,
+) -> Result<reqwest::ClientBuilder, String> {
+    let proxy_enabled = db::get_setting(pool, "proxy_enabled")
+        .await
+        .ok()
+        .flatten()
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    if proxy_enabled {
+        let proxy_url = db::get_setting(pool, "proxy_url")
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| "http://127.0.0.1:7897".to_string());
+
+        let proxy = reqwest::Proxy::all(&proxy_url)
+            .map_err(|e| format!("Invalid proxy URL '{}': {}", proxy_url, e))?;
+        builder = builder.proxy(proxy);
+    }
+
+    Ok(builder)
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -84,8 +114,8 @@ async fn fetch_github_skills(
     registry_id: &str,
 ) -> Result<Vec<MarketplaceSkill>, String> {
     let auth = github_import::github_direct_auth_from_settings(pool).await?;
-    let repo = github_import::resolve_repo_ref(url, auth.as_deref()).await?;
-    let candidates = github_import::fetch_repo_skill_candidates(&repo, auth.as_deref()).await?;
+    let repo = github_import::resolve_repo_ref(url, pool, auth.as_deref()).await?;
+    let candidates = github_import::fetch_repo_skill_candidates(&repo, pool, auth.as_deref()).await?;
     Ok(marketplace_skills_from_candidates(registry_id, candidates))
 }
 
@@ -498,10 +528,14 @@ pub async fn install_marketplace_skill(
     .ok_or_else(|| "Skill not found".to_string())?;
 
     // Download SKILL.md content
-    let client = reqwest::Client::builder()
-        .user_agent("skills-manage/0.9.1")
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = apply_proxy_settings(
+        reqwest::Client::builder()
+            .user_agent("skills-manage/0.9.1"),
+        &state.db,
+    )
+    .await?
+    .build()
+    .map_err(|e| e.to_string())?;
 
     let resp = client
         .get(&skill.download_url)
@@ -719,12 +753,16 @@ pub async fn explain_skill(state: State<'_, AppState>, content: String) -> Resul
         .await
         .unwrap_or_else(|| "claude-sonnet-4-20250514".to_string());
 
-    let client = reqwest::Client::builder()
-        .user_agent("skills-manage/0.9.1")
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(60))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = apply_proxy_settings(
+        reqwest::Client::builder()
+            .user_agent("skills-manage/0.9.1")
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(60)),
+        &state.db,
+    )
+    .await?
+    .build()
+    .map_err(|e| e.to_string())?;
 
     // Truncate content if too long
     let truncated = if content.len() > 8000 {
@@ -1074,12 +1112,16 @@ async fn do_explain_skill_stream(
     let body = build_stream_request_body(&model, &prompt);
 
     // Streaming: only connect_timeout (total `.timeout()` would kill long streams).
-    let client = reqwest::Client::builder()
-        .user_agent("skills-manage/0.9.1")
-        .connect_timeout(Duration::from_secs(10))
-        .pool_idle_timeout(Duration::from_secs(90))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = apply_proxy_settings(
+        reqwest::Client::builder()
+            .user_agent("skills-manage/0.9.1")
+            .connect_timeout(Duration::from_secs(10))
+            .pool_idle_timeout(Duration::from_secs(90)),
+        pool,
+    )
+    .await?
+    .build()
+    .map_err(|e| e.to_string())?;
 
     // Try primary endpoint; on connect-layer failure, try fallback once
     let resp =

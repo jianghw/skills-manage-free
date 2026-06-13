@@ -12,6 +12,11 @@ interface SettingsState {
   isLoadingGitHubPat: boolean;
   isSavingGitHubPat: boolean;
 
+  // Proxy settings
+  proxyEnabled: boolean;
+  proxyUrl: string;
+  isLoadingProxySettings: boolean;
+
   // Actions — scan directories
   loadScanDirectories: () => Promise<void>;
   addScanDirectory: (path: string, label?: string) => Promise<ScanDirectory>;
@@ -28,6 +33,11 @@ interface SettingsState {
   updateCustomAgent: (agentId: string, config: UpdateCustomAgentConfig) => Promise<AgentWithStatus>;
   removeCustomAgent: (agentId: string) => Promise<void>;
 
+  // Actions — proxy settings
+  loadProxySettings: () => Promise<void>;
+  setProxyEnabled: (enabled: boolean) => Promise<void>;
+  setProxyUrl: (url: string) => Promise<void>;
+
   clearError: () => void;
 }
 
@@ -40,6 +50,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   githubPat: "",
   isLoadingGitHubPat: false,
   isSavingGitHubPat: false,
+
+  // Proxy settings initial state
+  proxyEnabled: false,
+  proxyUrl: "http://127.0.0.1:7897",
+  isLoadingProxySettings: false,
 
   // ── Scan Directories ───────────────────────────────────────────────────────
 
@@ -175,6 +190,45 @@ export const useSettingsStore = create<SettingsState>((set) => ({
    */
   removeCustomAgent: async (agentId: string) => {
     await invoke<void>("remove_custom_agent", { agentId });
+  },
+
+  // ── Proxy Settings ──────────────────────────────────────────────────────────
+
+  loadProxySettings: async () => {
+    set({ isLoadingProxySettings: true, error: null });
+    try {
+      const enabled = await invoke<string | null>("get_setting", { key: "proxy_enabled" });
+      const url = await invoke<string | null>("get_setting", { key: "proxy_url" });
+      set({
+        proxyEnabled: (enabled ?? "") === "true",
+        proxyUrl: url ?? "http://127.0.0.1:7897",
+        isLoadingProxySettings: false,
+      });
+    } catch (err) {
+      set({ error: String(err), isLoadingProxySettings: false });
+    }
+  },
+
+  setProxyEnabled: async (enabled: boolean) => {
+    set({ error: null });
+    try {
+      await invoke("set_setting", { key: "proxy_enabled", value: enabled ? "true" : "false" });
+      set({ proxyEnabled: enabled });
+    } catch (err) {
+      set({ error: String(err) });
+      throw err;
+    }
+  },
+
+  setProxyUrl: async (url: string) => {
+    set({ error: null });
+    try {
+      await invoke("set_setting", { key: "proxy_url", value: url });
+      set({ proxyUrl: url });
+    } catch (err) {
+      set({ error: String(err) });
+      throw err;
+    }
   },
 
   // ── Misc ───────────────────────────────────────────────────────────────────

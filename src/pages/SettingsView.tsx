@@ -27,7 +27,7 @@ import { deriveHomeDir, formatPathForDisplay, joinPathForDisplay } from "@/lib/p
 
 // ─── App constants ────────────────────────────────────────────────────────────
 
-const APP_VERSION = "0.9.1";
+const APP_VERSION = "0.11.0";
 const DB_PATH_FALLBACK = "~/.skillsmanage/db.sqlite";
 
 /** Catppuccin Lavender hex per flavor — used for visual preview dots on flavor buttons (default accent). */
@@ -182,6 +182,13 @@ export function SettingsView() {
   const saveGitHubPat = useSettingsStore((s) => s.saveGitHubPat);
   const clearGitHubPat = useSettingsStore((s) => s.clearGitHubPat);
 
+  const proxyEnabled = useSettingsStore((s) => s.proxyEnabled);
+  const proxyUrl = useSettingsStore((s) => s.proxyUrl);
+  const isLoadingProxySettings = useSettingsStore((s) => s.isLoadingProxySettings);
+  const loadProxySettings = useSettingsStore((s) => s.loadProxySettings);
+  const setProxyEnabled = useSettingsStore((s) => s.setProxyEnabled);
+  const setProxyUrlStore = useSettingsStore((s) => s.setProxyUrl);
+
   const agents = usePlatformStore((s) => s.agents);
 
   const flavor = useThemeStore((s) => s.flavor);
@@ -288,17 +295,23 @@ export function SettingsView() {
   const [platformError, setPlatformError] = useState<string | null>(null);
   const [githubPatInput, setGitHubPatInput] = useState("");
   const [githubPatMessage, setGitHubPatMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [proxyUrlInput, setProxyUrlInput] = useState("");
 
   // ── Load on mount ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     loadScanDirectories();
     loadGitHubPat();
-  }, [loadScanDirectories, loadGitHubPat]);
+    loadProxySettings();
+  }, [loadScanDirectories, loadGitHubPat, loadProxySettings]);
 
   useEffect(() => {
     setGitHubPatInput(githubPat);
   }, [githubPat]);
+
+  useEffect(() => {
+    setProxyUrlInput(proxyUrl);
+  }, [proxyUrl]);
 
   const isGitHubPatDirty = useMemo(() => githubPatInput.trim() !== githubPat, [githubPatInput, githubPat]);
 
@@ -571,6 +584,79 @@ export function SettingsView() {
                   <span className="text-xs text-muted-foreground">{t("settings.loading")}</span>
                 ) : null}
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Section 2.5: Network Proxy ──────────────────────────────────── */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Globe className="size-5 text-muted-foreground" />
+              <div>
+                <CardTitle>{lang === "zh" ? "网络代理" : "Network Proxy"}</CardTitle>
+                <CardDescription className="mt-1">
+                  {lang === "zh" ? "让技能市场、GitHub 导入和 AI 解释的网络请求通过代理服务器转发。" : "Route marketplace, GitHub import, and AI explanation requests through a proxy server."}
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-sm font-medium">
+                    {lang === "zh" ? "启用代理" : "Enable Proxy"}
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    {lang === "zh" ? "关闭时将不走代理直连" : "When off, requests go directly"}
+                  </p>
+                </div>
+                <Switch
+                  checked={proxyEnabled}
+                  onCheckedChange={(checked) => {
+                    setProxyEnabled(checked);
+                  }}
+                  disabled={isLoadingProxySettings}
+                  aria-label={lang === "zh" ? "启用网络代理" : "Enable network proxy"}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="proxy-url" className="mb-1 block text-xs text-muted-foreground">
+                  {lang === "zh" ? "代理地址" : "Proxy URL"}
+                </label>
+                <Input
+                  id="proxy-url"
+                  type="text"
+                  placeholder="http://127.0.0.1:7897"
+                  value={proxyUrlInput}
+                  onChange={(e) => setProxyUrlInput(e.target.value)}
+                  disabled={!proxyEnabled || isLoadingProxySettings}
+                />
+              </div>
+
+              {proxyUrlInput !== proxyUrl && proxyEnabled && (
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await setProxyUrlStore(proxyUrlInput);
+                      toast.success(lang === "zh" ? "代理设置已保存" : "Proxy settings saved");
+                    } catch (err) {
+                      toast.error(String(err));
+                    }
+                  }}
+                >
+                  {lang === "zh" ? "保存" : "Save"}
+                </Button>
+              )}
+
+              {!proxyUrlInput.trim() && proxyEnabled && (
+                <p className="text-xs text-destructive">
+                  {lang === "zh" ? "请输入有效的代理地址" : "Please enter a valid proxy URL"}
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

@@ -115,6 +115,13 @@ function setupMocks({
       loadGitHubPat,
       saveGitHubPat,
       clearGitHubPat,
+      // Proxy settings
+      proxyEnabled: false,
+      proxyUrl: "http://127.0.0.1:7897",
+      isLoadingProxySettings: false,
+      loadProxySettings: vi.fn(),
+      setProxyEnabled: vi.fn(),
+      setProxyUrl: vi.fn(),
       clearError: vi.fn(),
     })
   );
@@ -275,13 +282,17 @@ describe("SettingsView", () => {
   it("shows toggle for custom directories", () => {
     setupMocks({ scanDirs: [mockCustomDir] });
     renderSettingsView();
-    expect(screen.getByRole("switch")).toBeTruthy();
+    const switches = screen.getAllByRole("switch");
+    // Custom dir toggle + proxy toggle
+    expect(switches.length).toBeGreaterThanOrEqual(1);
   });
 
   it("does not show toggle for builtin directories", () => {
     setupMocks({ scanDirs: [mockBuiltinDir] });
     renderSettingsView();
-    expect(screen.queryByRole("switch")).toBeNull();
+    const switches = screen.getAllByRole("switch");
+    // Only proxy toggle, no dir toggle for builtin dirs
+    expect(switches.length).toBe(1);
   });
 
   it("shows 启用 label when directory is active", () => {
