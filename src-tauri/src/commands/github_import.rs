@@ -659,8 +659,7 @@ pub(crate) async fn github_direct_auth_from_settings(
 
 async fn github_client(pool: &DbPool) -> Result<reqwest::Client, String> {
     let builder = marketplace::apply_proxy_settings(
-        reqwest::Client::builder()
-            .user_agent("skills-manage/0.9.1"),
+        reqwest::Client::builder().user_agent("skills-manage/0.9.1"),
         pool,
     )
     .await?;
