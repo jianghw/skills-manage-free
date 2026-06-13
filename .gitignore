@@ -3,7 +3,7 @@ dist/
 build/
 out/
 
-src-tauri/target/
+
 reference/
 .vscode/
 *.db
