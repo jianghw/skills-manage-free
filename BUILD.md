@@ -66,9 +66,13 @@ build-release.bat
 脚本自动执行：
 1. 清理残留的 cargo/rustc 进程
 2. 初始化 MSVC 编译环境（vcvars64.bat）
-3. 编译 Rust release 二进制
-4. 安装前端依赖
-5. 构建前端并打包 NSIS 安装程序
+3. 安装项目依赖
+4. 一次完成 Rust 编译 + 前端构建 + NSIS 打包
+5. 验证输出文件
+
+> **注意**：请直接在 **cmd.exe 终端** 中运行此脚本（双击或在终端执行），
+> 不要通过 IDE 或 AI 工具的 shell 执行（它们有超时限制）。Rust 编译阶段
+> 可能短暂无输出，这是正常现象，请不要提前关闭窗口。
 
 ---
 
@@ -95,30 +99,28 @@ call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliar
 > 路径因 VS 版本而异。VS 2022 Community/Professional/Enterprise 也在此路径。
 > 不执行此步骤会导致 Rust 找不到 Windows SDK 和 MSVC 链接器。
 
-### 第 3 步：编译 Rust 二进制
-
-```bash
-cargo build --manifest-path src-tauri\Cargo.toml --release
-```
-
-输出：`src-tauri\target\release\skills-manage.exe`（约 24 MB）
-
-### 第 4 步：安装前端依赖
+### 第 3 步：安装前端依赖
 
 ```bash
 pnpm install
 ```
 
-### 第 5 步：构建前端并打包安装程序
+### 第 4 步：Tauri 全量构建（Rust + 前端 + 打包）
 
 ```bash
 call vcvars64.bat
 pnpm tauri build --bundles nsis
 ```
 
-输出：`src-tauri\target\release\bundle\nsis\skills-manage_*-x64-setup.exe`（约 8 MB）
-
+> 这一步同时做三件事：
+> 1. 编译 Rust release 二进制（嵌入前端资源）
+> 2. 构建前端（TypeScript 编译 + Vite 打包）
+> 3. 生成 NSIS 安装程序
+>
 > `--bundles nsis` 指定生成 NSIS 安装包，无需额外安装 WiX Toolset。
+>
+> Rust 二进制输出：`src-tauri\target\release\skills-manage.exe`（约 24 MB）
+> NSIS 安装包输出：`src-tauri\target\release\bundle\nsis\skills-manage_*-x64-setup.exe`（约 8 MB）
 
 ---
 
