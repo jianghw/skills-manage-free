@@ -473,7 +473,7 @@ describe("SettingsView", () => {
   it("shows the app version in the about section", () => {
     setupMocks();
     renderSettingsView();
-    expect(screen.getByText("skills-manage v0.9.1")).toBeTruthy();
+    expect(screen.getByText("skills-manage v0.11.0")).toBeTruthy();
   });
 
   it("shows the database path in the about section", () => {
