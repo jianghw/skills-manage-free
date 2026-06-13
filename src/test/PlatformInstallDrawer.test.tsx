@@ -51,7 +51,6 @@ const skill: SkillWithLinks = {
   is_central: true,
   scanned_at: "2026-04-29T00:00:00Z",
   linked_agents: ["claude-code"],
-  read_only_agents: ["cursor"],
 };
 
 describe("PlatformInstallDrawer", () => {
@@ -69,13 +68,11 @@ describe("PlatformInstallDrawer", () => {
 
     expect(screen.getByRole("dialog", { name: /管理 demo-skill 的平台安装/i })).toBeInTheDocument();
     expect(screen.getByText("Claude Code")).toBeInTheDocument();
-    expect(screen.getByText("Cursor")).toBeInTheDocument();
     expect(screen.queryByText("Central Skills")).not.toBeInTheDocument();
     expect(screen.getAllByText("已安装").length).toBeGreaterThan(0);
-    expect(screen.getByText("共享只读")).toBeInTheDocument();
   });
 
-  it("toggles installable platforms and disables shared read-only rows", () => {
+  it("toggles installable platforms", () => {
     const onToggle = vi.fn();
     render(
       <PlatformInstallDrawer
@@ -90,8 +87,6 @@ describe("PlatformInstallDrawer", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "从 Claude Code 卸载 demo-skill" }));
     expect(onToggle).toHaveBeenCalledWith("demo-skill", "claude-code");
-
-    expect(screen.getByRole("button", { name: "Cursor 通过共享目录可用" })).toBeDisabled();
   });
 
   it("filters platforms by search text", () => {

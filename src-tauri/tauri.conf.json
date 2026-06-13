@@ -25,7 +25,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "publisher": "iamzhihuix",
     "homepage": "https://github.com/iamzhihuix/skills-manage",
     "licenseFile": "../LICENSE",

@@ -559,25 +559,6 @@ describe("SkillDetailView", () => {
     expect(cursorToggle.querySelector("img")).toHaveClass("opacity-40", "grayscale");
   });
 
-  it("marks read-only universal platform icons as available but disabled", () => {
-    applyStoreMocks({
-      detail: {
-        ...mockDetail,
-        read_only_agents: ["cursor"],
-      },
-    });
-    renderView("frontend-design", "page", { skipMockSetup: true });
-
-    const cursorToggle = screen.getByRole("button", {
-      name: /切换 frontend-design 在 Cursor 的链接状态/i,
-    });
-
-    expect(cursorToggle).toHaveAttribute("aria-pressed", "true");
-    expect(cursorToggle).toBeDisabled();
-    fireEvent.click(cursorToggle);
-    expect(mockInstallSkill).not.toHaveBeenCalled();
-  });
-
   it("calls installSkill when unlinked platform icon is clicked", async () => {
     renderView();
     // Cursor is NOT installed

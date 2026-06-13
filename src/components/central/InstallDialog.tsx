@@ -53,21 +53,11 @@ export function InstallDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // When the dialog opens for a skill, pre-select currently unlinked agents.
-  // Agents that already have this skill are checked by default too so the
-  // user can see the full picture, but they can deselect any.
+  // When the dialog opens for a skill, start with no platforms pre-selected.
+  // Users must explicitly choose which platforms to install to.
   useEffect(() => {
     if (open && skill) {
-      // Default: check agents that are already linked (show current state).
-      const initialSelection = new Set<string>(
-        targetAgents
-          .filter((a) =>
-            skill.linked_agents.includes(a.id) ||
-            (skill.read_only_agents?.includes(a.id) ?? false)
-          )
-          .map((a) => a.id)
-      );
-      setSelectedAgentIds(initialSelection);
+      setSelectedAgentIds(new Set());
       setInstallMethod("symlink");
       setError(null);
     }
@@ -86,16 +76,10 @@ export function InstallDialog({
     });
   }
 
-  function getSelectedInstallableAgentIds() {
-    if (!skill) return [];
-    const readOnlyAgentIds = new Set(skill.read_only_agents ?? []);
-    return Array.from(selectedAgentIds).filter((id) => !readOnlyAgentIds.has(id));
-  }
-
   async function handleConfirm() {
     if (!skill) return;
 
-    const agentIds = getSelectedInstallableAgentIds();
+    const agentIds = Array.from(selectedAgentIds);
     if (agentIds.length === 0) {
       setError(t("installDialog.selectPlatform"));
       return;
@@ -114,7 +98,7 @@ export function InstallDialog({
   }
 
   if (!skill) return null;
-  const selectedInstallableCount = getSelectedInstallableAgentIds().length;
+  const selectedInstallableCount = selectedAgentIds.size;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -138,7 +122,6 @@ export function InstallDialog({
             ) : (
               targetAgents.map((agent) => {
                 const isLinked = skill.linked_agents.includes(agent.id);
-                const isReadOnly = skill.read_only_agents?.includes(agent.id) ?? false;
                 const isChecked = selectedAgentIds.has(agent.id);
 
                 return (
@@ -148,7 +131,6 @@ export function InstallDialog({
                   >
                     <Checkbox
                       checked={isChecked}
-                      disabled={isReadOnly}
                       onCheckedChange={(checked) =>
                         handleCheckboxChange(agent.id, !!checked)
                       }
@@ -156,19 +138,11 @@ export function InstallDialog({
                     />
                     <span
                       className="text-sm text-foreground flex-1 cursor-pointer select-none truncate"
-                      onClick={() => {
-                        if (!isReadOnly) {
-                          handleCheckboxChange(agent.id, !isChecked);
-                        }
-                      }}
+                      onClick={() => handleCheckboxChange(agent.id, !isChecked)}
                     >
                       {agent.display_name}
                     </span>
-                    {isReadOnly ? (
-                      <span className="text-xs text-primary shrink-0">
-                        {t("installDialog.alwaysIncluded")}
-                      </span>
-                    ) : isLinked ? (
+                    {isLinked ? (
                       <span className="text-xs text-primary shrink-0">
                         {t("installDialog.alreadyLinked")}
                       </span>

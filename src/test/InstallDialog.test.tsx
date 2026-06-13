@@ -129,22 +129,6 @@ describe("InstallDialog", () => {
     expect(screen.getByText("已链接")).toBeInTheDocument();
   });
 
-  it("shows read-only universal platforms as checked and non-installable", () => {
-    renderDialog({
-      skill: {
-        ...mockSkill,
-        linked_agents: [],
-        read_only_agents: ["cursor"],
-      },
-    });
-
-    const cursorCheckbox = screen.getByLabelText("Cursor");
-    expect(cursorCheckbox).toBeChecked();
-    expect(cursorCheckbox).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByText("始终包含")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /安装到 0 个平台/i })).toBeDisabled();
-  });
-
   it("shows 'not detected' badge for undetected agents", () => {
     renderDialog();
     // gemini-cli has is_detected: false
@@ -162,11 +146,9 @@ describe("InstallDialog", () => {
 
   it("shows confirm button with count of selected platforms", () => {
     renderDialog();
-    // By default, linked agents (claude-code) are pre-selected.
-    // Unlinked agents (cursor, gemini-cli) are not pre-selected.
-    // So 1 is pre-selected: claude-code
+    // No platforms are pre-selected.
     expect(
-      screen.getByRole("button", { name: /安装到 1 个平台/i })
+      screen.getByRole("button", { name: /安装到 0 个平台/i })
     ).toBeInTheDocument();
   });
 
@@ -174,8 +156,10 @@ describe("InstallDialog", () => {
     mockOnInstall.mockResolvedValueOnce(undefined);
 
     renderDialog();
+    // Check a platform first
+    fireEvent.click(screen.getByLabelText("Claude Code"));
     const confirmBtn = screen.getByRole("button", {
-      name: /安装到 .* 个平台/i,
+      name: /安装到 1 个平台/i,
     });
     fireEvent.click(confirmBtn);
 
@@ -192,8 +176,10 @@ describe("InstallDialog", () => {
     mockOnInstall.mockResolvedValueOnce(undefined);
 
     renderDialog();
+    // Check a platform first
+    fireEvent.click(screen.getByLabelText("Claude Code"));
     const confirmBtn = screen.getByRole("button", {
-      name: /安装到 .* 个平台/i,
+      name: /安装到 1 个平台/i,
     });
     fireEvent.click(confirmBtn);
 
@@ -210,6 +196,8 @@ describe("InstallDialog", () => {
     mockOnInstall.mockResolvedValueOnce(undefined);
 
     renderDialog();
+    // Check a platform first
+    fireEvent.click(screen.getByLabelText("Claude Code"));
 
     // Select the Copy radio button
     const copyRadio = screen.getByText("复制安装").closest("label");
@@ -217,7 +205,7 @@ describe("InstallDialog", () => {
     fireEvent.click(copyRadio!);
 
     const confirmBtn = screen.getByRole("button", {
-      name: /安装到 .* 个平台/i,
+      name: /安装到 1 个平台/i,
     });
     fireEvent.click(confirmBtn);
 
@@ -234,8 +222,10 @@ describe("InstallDialog", () => {
     mockOnInstall.mockResolvedValueOnce(undefined);
 
     renderDialog();
+    // Check a platform first
+    fireEvent.click(screen.getByLabelText("Claude Code"));
     const confirmBtn = screen.getByRole("button", {
-      name: /安装到 .* 个平台/i,
+      name: /安装到 1 个平台/i,
     });
     fireEvent.click(confirmBtn);
 
@@ -248,8 +238,10 @@ describe("InstallDialog", () => {
     mockOnInstall.mockRejectedValueOnce(new Error("Permission denied"));
 
     renderDialog();
+    // Check a platform first
+    fireEvent.click(screen.getByLabelText("Claude Code"));
     const confirmBtn = screen.getByRole("button", {
-      name: /安装到 .* 个平台/i,
+      name: /安装到 1 个平台/i,
     });
     fireEvent.click(confirmBtn);
 
@@ -273,18 +265,18 @@ describe("InstallDialog", () => {
   it("updates confirm button count when checkbox toggled", async () => {
     renderDialog();
 
-    // Initially 1 selected (claude-code, already linked)
+    // Initially 0 selected (no platforms are pre-selected)
     expect(
-      screen.getByRole("button", { name: /安装到 1 个平台/i })
+      screen.getByRole("button", { name: /安装到 0 个平台/i })
     ).toBeInTheDocument();
 
-    // Check Cursor (add 1 more)
+    // Check Cursor (add 1)
     const cursorCheckbox = screen.getByLabelText("Cursor");
     fireEvent.click(cursorCheckbox);
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: /安装到 2 个平台/i })
+        screen.getByRole("button", { name: /安装到 1 个平台/i })
       ).toBeInTheDocument();
     });
   });

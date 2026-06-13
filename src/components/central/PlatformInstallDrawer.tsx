@@ -18,7 +18,7 @@ import type { AgentWithStatus, SkillWithLinks } from "@/types";
 import { isInstallTargetAgent } from "@/lib/agents";
 import { cn } from "@/lib/utils";
 
-type PlatformDrawerTab = "installed" | "coding" | "lobster" | "shared";
+type PlatformDrawerTab = "installed" | "coding" | "lobster";
 
 interface PlatformInstallDrawerProps {
   open: boolean;
@@ -52,31 +52,25 @@ export function PlatformInstallDrawer({
     () => new Set(skill?.linked_agents ?? []),
     [skill?.linked_agents]
   );
-  const readOnlyAgentIds = useMemo(
-    () => new Set(skill?.read_only_agents ?? []),
-    [skill?.read_only_agents]
-  );
 
   const rows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return targetAgents
       .filter((agent) => {
         const isLinked = linkedAgentIds.has(agent.id);
-        const isReadOnly = readOnlyAgentIds.has(agent.id);
-        if (activeTab === "installed" && !isLinked && !isReadOnly) return false;
+        if (activeTab === "installed" && !isLinked) return false;
         if (activeTab === "coding" && agent.category === "lobster") return false;
         if (activeTab === "lobster" && agent.category !== "lobster") return false;
-        if (activeTab === "shared" && !isReadOnly) return false;
         if (!normalizedQuery) return true;
         return `${agent.display_name} ${agent.id}`.toLowerCase().includes(normalizedQuery);
       })
       .sort((a, b) => {
-        const aInstalled = linkedAgentIds.has(a.id) || readOnlyAgentIds.has(a.id);
-        const bInstalled = linkedAgentIds.has(b.id) || readOnlyAgentIds.has(b.id);
+        const aInstalled = linkedAgentIds.has(a.id);
+        const bInstalled = linkedAgentIds.has(b.id);
         if (aInstalled !== bInstalled) return aInstalled ? -1 : 1;
         return a.display_name.localeCompare(b.display_name);
       });
-  }, [activeTab, linkedAgentIds, query, readOnlyAgentIds, targetAgents]);
+  }, [activeTab, linkedAgentIds, query, targetAgents]);
 
   if (!skill) return null;
 
@@ -84,7 +78,6 @@ export function PlatformInstallDrawer({
     { value: "installed", label: t("platformDrawer.tabInstalled") },
     { value: "coding", label: t("sidebar.categoryCoding") },
     { value: "lobster", label: t("sidebar.categoryLobster") },
-    { value: "shared", label: t("platformDrawer.tabShared") },
   ];
 
   return (
@@ -177,13 +170,10 @@ export function PlatformInstallDrawer({
                 <div className="space-y-2">
                   {rows.map((agent) => {
                     const isLinked = linkedAgentIds.has(agent.id);
-                    const isReadOnly = readOnlyAgentIds.has(agent.id);
                     const isToggling = togglingAgentId === agent.id;
-                    const statusLabel = isReadOnly
-                      ? t("platformDrawer.statusShared")
-                      : isLinked
-                        ? t("platformDrawer.statusInstalled")
-                        : t("platformDrawer.statusNotInstalled");
+                    const statusLabel = isLinked
+                      ? t("platformDrawer.statusInstalled")
+                      : t("platformDrawer.statusNotInstalled");
 
                     return (
                       <div
@@ -200,40 +190,26 @@ export function PlatformInstallDrawer({
                             {!agent.is_detected && <span>{t("installDialog.notDetected")}</span>}
                           </div>
                         </div>
-                        {isReadOnly ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            disabled
-                            aria-label={t("platformDrawer.sharedAria", {
-                              platform: agent.display_name,
-                            })}
-                          >
-                            {t("installDialog.alwaysIncluded")}
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant={isLinked ? "outline" : "default"}
-                            size="sm"
-                            disabled={isToggling}
-                            aria-label={
-                              isLinked
-                                ? t("platformDrawer.uninstallAria", {
-                                    skill: skill.name,
-                                    platform: agent.display_name,
-                                  })
-                                : t("platformDrawer.installAria", {
-                                    skill: skill.name,
-                                    platform: agent.display_name,
-                                  })
-                            }
-                            onClick={() => onToggle(skill.id, agent.id)}
-                          >
-                            {isLinked ? t("common.uninstall") : t("common.install")}
-                          </Button>
-                        )}
+                        <Button
+                          type="button"
+                          variant={isLinked ? "outline" : "default"}
+                          size="sm"
+                          disabled={isToggling}
+                          aria-label={
+                            isLinked
+                              ? t("platformDrawer.uninstallAria", {
+                                  skill: skill.name,
+                                  platform: agent.display_name,
+                                })
+                              : t("platformDrawer.installAria", {
+                                  skill: skill.name,
+                                  platform: agent.display_name,
+                                })
+                          }
+                          onClick={() => onToggle(skill.id, agent.id)}
+                        >
+                          {isLinked ? t("common.uninstall") : t("common.install")}
+                        </Button>
                       </div>
                     );
                   })}
