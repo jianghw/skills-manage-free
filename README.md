@@ -1,221 +1,212 @@
-# skills-manage
+# skills-manage 构建与安装指南
 
-`skills-manage` is a Tauri desktop app for managing AI coding agent skills across multiple platforms from one place.
+## 目录
 
-[中文文档](README_CN.md)
+- [环境要求](#环境要求)
+- [快速构建](#快速构建)
+- [手动分步构建](#手动分步构建)
+- [安装运行](#安装运行)
+- [磁盘空间说明](#磁盘空间说明)
+- [常见问题](#常见问题)
 
-> **Disclaimer**
->
-> `skills-manage` is an independent, unofficial desktop application for managing local skill directories and importing public skill metadata. It is not affiliated with, endorsed by, or sponsored by Anthropic, OpenAI, GitHub, MiniMax, or any other supported platform, publisher, or trademark owner.
+---
 
-## Overview
+## 环境要求
 
-`skills-manage` follows the [Agent Skills](https://github.com/anthropics/agent-skills) open pattern and uses `~/.agents/skills/` as the canonical central directory. Skills can then be installed to individual platforms through symlinks, so one source of truth can drive multiple AI coding tools.
+### 必需软件
 
-## Highlights
+| 依赖 | 版本要求 | 验证命令 | 获取方式 |
+|------|---------|---------|---------|
+| **Node.js** | ^18.0 | `node --version` | [nodejs.org](https://nodejs.org) |
+| **pnpm** | ^9.0 | `pnpm --version` | `npm install -g pnpm` |
+| **Rust** | ^1.85 | `rustc --version` | [rustup.rs](https://rustup.rs) |
+| **Visual Studio Build Tools** | 2022 | — | [visualstudio.microsoft.com](https://visualstudio.microsoft.com/visual-cpp-build-tools/) |
 
-- Central skill library plus per-platform install and uninstall flows.
-- Claude Code can surface native skills and read-only marketplace plugin skills in one platform view.
-- Full skill detail view with Markdown preview, raw source view, and AI explanation generation.
-- Collections for organizing skills and batch-installing them to platforms.
-- Discover scan for project-level skill libraries, including an Obsidian sidebar category for vault skills (`.skills/`, `.agents/skills/`, `.claude/skills/`).
-- Marketplace browsing and GitHub repository import with authenticated requests and retry fallback.
-- Fast search for large skill libraries with deferred queries, lazy indexing, and virtualization.
-- Bilingual UI, Catppuccin themes, accent colors, onboarding, and responsive navigation.
+### 国内用户加速配置
 
-## Screenshots
+#### Cargo 镜像（`%USERPROFILE%\.cargo\config.toml`）
 
-### Central skills and platform installs
+```toml
+[source.crates-io]
+replace-with = "tuna"
 
-![Central skills library view](images/01.png)
+[source.tuna]
+registry = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git"
 
-### Review installed skills on a specific platform
-
-![Platform skill view](images/06.png)
-
-### Discover local project skill libraries
-
-![Discover project skill libraries](images/03.png)
-
-### Browse marketplace publishers and skills
-
-![Marketplace view](images/04.png)
-
-### Import skills from a GitHub repository
-
-![GitHub repository import wizard](images/02.png)
-
-### Organize reusable collections
-
-![Skill collections view](images/05.png)
-
-## Download
-
-- Latest release: <https://github.com/iamzhihuix/skills-manage/releases/latest>
-- Current prebuilt packages: Apple Silicon macOS (`.dmg` and `.app.zip`)
-- Other platforms: run from source for now
-
-### macOS Unsigned Build
-
-The current public macOS build is not notarized. If macOS shows a warning such as:
-
-![macOS damaged app warning](images/app-damaged.png)
-
-- `"skills-manage" is damaged and can't be opened`
-- `"skills-manage" cannot be opened because Apple could not verify it`
-
-the app is usually not actually corrupted; it is being blocked by Gatekeeper quarantine on an unsigned build.
-
-After moving the app to `/Applications`, run:
-
-```bash
-xattr -dr com.apple.quarantine "/Applications/skills-manage.app"
+[registries.crates-io]
+protocol = "sparse"
 ```
 
-Then launch the app again from Finder. If your app is stored somewhere else, replace the path with the actual `.app` path.
+如果清华镜像慢，可切换为：
 
-## Supported Platforms
+```toml
+[source.rustcc]
+registry = "https://code.aliyun.com/rustcc/crates.io-index.git"
+```
 
-| Category | Platform | Skills Directory |
-|----------|----------|-----------------|
-| Coding | Claude Code | `~/.claude/skills/` |
-| Coding | Codex CLI | `~/.agents/skills/` |
-| Coding | Cursor | `~/.cursor/skills/` |
-| Coding | Gemini CLI | `~/.gemini/skills/` |
-| Coding | Trae | `~/.trae/skills/` |
-| Coding | Factory Droid | `~/.factory/skills/` |
-| Coding | Junie | `~/.junie/skills/` |
-| Coding | Qwen | `~/.qwen/skills/` |
-| Coding | Trae CN | `~/.trae-cn/skills/` |
-| Coding | Windsurf | `~/.windsurf/skills/` |
-| Coding | Qoder | `~/.qoder/skills/` |
-| Coding | Augment | `~/.augment/skills/` |
-| Coding | OpenCode | `~/.opencode/skills/` |
-| Coding | KiloCode | `~/.kilocode/skills/` |
-| Coding | OB1 | `~/.ob1/skills/` |
-| Coding | Amp | `~/.amp/skills/` |
-| Coding | Kiro | `~/.kiro/skills/` |
-| Coding | CodeBuddy | `~/.codebuddy/skills/` |
-| Coding | Hermes | `~/.hermes/skills/` |
-| Coding | Copilot | `~/.copilot/skills/` |
-| Coding | Aider | `~/.aider/skills/` |
-| Lobster | OpenClaw (开爪) | `~/.openclaw/skills/` |
-| Lobster | QClaw (千爪) | `~/.qclaw/skills/` |
-| Lobster | EasyClaw (简爪) | `~/.easyclaw/skills/` |
-| Lobster | EasyClaw V2 | `~/.easyclaw-20260322-01/skills/` |
-| Lobster | AutoClaw | `~/.openclaw-autoclaw/skills/` |
-| Lobster | WorkBuddy (打工搭子) | `~/.workbuddy/skills-marketplace/skills/` |
-| Central | Central Skills | `~/.agents/skills/` |
+> **注意**：`config.toml` 文件**必须为 UTF-8 无 BOM 编码**，编辑器设置错误会导致 cargo 报错 `TOML parse error`。
 
-> Note: Claude Code also surfaces marketplace plugin directories under `~/.claude/plugins/marketplaces/*` as read-only rows in the Claude view. Those entries are display-only and are not managed like native skills in `~/.claude/skills/`.
+#### npm/pnpm 镜像
 
-Custom platforms can be added through Settings.
+```bash
+pnpm config set registry https://registry.npmmirror.com
+```
 
-## Privacy & Security
+---
 
-- **Local-first storage** — metadata, collections, scan results, settings, and cached AI explanations stay in `~/.skillsmanage/db.sqlite` or the local skill directories you manage.
-- **No telemetry** — the app does not include analytics, crash reporting, or usage tracking.
-- **Network access is feature-driven** — outbound requests only happen when you explicitly use marketplace sync/download, GitHub import, or AI explanation generation.
-- **Credentials are stored locally** — GitHub PAT and AI API keys are kept in the local SQLite settings table and are not encrypted at rest by the app.
-- Never post real secrets in issues, pull requests, screenshots, or logs.
+## 快速构建
 
-## Tech Stack
+项目根目录提供了自动化构建脚本 `build-release.bat`，一键完成全部流程：
 
-| Layer | Technology |
-|-------|-----------|
-| Desktop framework | Tauri v2 |
-| Frontend | React 19, TypeScript, Tailwind CSS 4 |
-| UI components | shadcn/ui, Lucide icons |
-| State management | Zustand |
-| Markdown | react-markdown |
-| i18n | react-i18next, i18next-browser-languagedetector |
-| Theming | Catppuccin 4-flavor palette |
-| Backend | Rust (serde, sqlx, chrono, uuid) |
-| Database | SQLite via sqlx (WAL mode) |
-| Routing | react-router-dom v7 |
+```bash
+# 在项目根目录执行
+build-release.bat
+```
 
-## Development
+脚本自动执行：
+1. 清理残留的 cargo/rustc 进程
+2. 初始化 MSVC 编译环境（vcvars64.bat）
+3. 安装项目依赖
+4. 一次完成 Rust 编译 + 前端构建 + NSIS 打包
+5. 验证输出文件
 
-### Prerequisites
+> **注意**：请直接在 **cmd.exe 终端** 中运行此脚本（双击或在终端执行），
+> 不要通过 IDE 或 AI 工具的 shell 执行（它们有超时限制）。Rust 编译阶段
+> 可能短暂无输出，这是正常现象，请不要提前关闭窗口。
 
-- [Node.js](https://nodejs.org/) (LTS)
-- [pnpm](https://pnpm.io/)
-- [Rust toolchain](https://rustup.rs/) (stable)
-- Tauri v2 system dependencies: <https://v2.tauri.app/start/prerequisites/>
+---
 
-### Install Dependencies
+## 手动分步构建
+
+如果需要精细控制，可以手动分步执行：
+
+### 第 1 步：清理旧进程
+
+```bash
+taskkill /F /IM cargo.exe 2>nul
+taskkill /F /IM rustc.exe 2>nul
+```
+
+> **为什么？** 前一次构建如果被中断，cargo 进程可能残留并锁住 build 目录，
+> 导致新构建卡在 `Blocking waiting for file lock on build directory`。
+
+### 第 2 步：初始化 MSVC 编译环境
+
+```bash
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+```
+
+> 路径因 VS 版本而异。VS 2022 Community/Professional/Enterprise 也在此路径。
+> 不执行此步骤会导致 Rust 找不到 Windows SDK 和 MSVC 链接器。
+
+### 第 3 步：安装前端依赖
 
 ```bash
 pnpm install
 ```
 
-### Run in Development
+### 第 4 步：Tauri 全量构建（Rust + 前端 + 打包）
 
 ```bash
+call vcvars64.bat
+pnpm tauri build --bundles nsis
+```
+
+> 这一步同时做三件事：
+> 1. 编译 Rust release 二进制（嵌入前端资源）
+> 2. 构建前端（TypeScript 编译 + Vite 打包）
+> 3. 生成 NSIS 安装程序
+>
+> `--bundles nsis` 指定生成 NSIS 安装包，无需额外安装 WiX Toolset。
+>
+> Rust 二进制输出：`src-tauri\target\release\skills-manage.exe`（约 24 MB）
+> NSIS 安装包输出：`src-tauri\target\release\bundle\nsis\skills-manage_*-x64-setup.exe`（约 8 MB）
+
+---
+
+## 安装运行
+
+### 方式一：NSIS 安装包（推荐给最终用户）
+
+1. 双击 `skills-manage_0.10.0_x64-setup.exe`
+2. 按向导完成安装
+3. 从开始菜单或桌面快捷方式启动
+
+### 方式二：免安装直接运行（开发/调试）
+
+```bash
+# 启动开发模式（前端热重载）
 pnpm tauri dev
+
+# 或直接运行 release 版本
+src-tauri\target\release\skills-manage.exe
 ```
 
-The Vite dev server runs on port `24200`.
+---
 
-### Validation
+## 磁盘空间说明
+
+一个完整的构建需要约 **5-7 GB** 磁盘空间，分布如下：
+
+| 目录 | 典型大小 | 说明 | 能否清理 |
+|------|---------|------|---------|
+| `src-tauri/target/release/` | ~2.3 GB | Release 构建产物 | ❌ 删除后需重编 |
+| `src-tauri/target/debug/` | ~3.2 GB | Debug 构建产物（`cargo check`/`cargo test` 遗留） | ✅ 可安全删除 |
+| `node_modules/` | ~600 MB | 前端 npm 依赖 | ✅ 可删除（`pnpm install` 恢复） |
+| `%USERPROFILE%\.cargo\registry\` | ~900 MB | Rust 依赖源码和缓存 | ✅ 可删除（网络慢，下同版本会复用） |
+| `dist/` | < 1 MB | Vite 前端构建输出 | ✅ 可删除（`pnpm build` 恢复） |
+
+### 磁盘清理命令
 
 ```bash
-pnpm test
-pnpm typecheck
-pnpm lint
-cd src-tauri && cargo test
-cd src-tauri && cargo clippy -- -D warnings
+# 清理 debug 构建产物（最值得清理，约 3.2 GB）
+rmdir /s /q src-tauri\target\debug
+
+# 清理 node_modules（可选）
+rmdir /s /q node_modules
+
+# 清理 Vite 构建输出（可选）
+rmdir /s /q dist
 ```
 
-## Project Structure
+---
 
-```text
-skills-manage/
-├── src/                        # React frontend
-│   ├── components/             # UI components
-│   ├── i18n/                   # Locale files and i18n setup
-│   ├── lib/                    # Frontend helpers
-│   ├── pages/                  # Route views
-│   ├── stores/                 # Zustand stores
-│   ├── test/                   # Vitest + RTL tests
-│   └── types/                  # Shared TypeScript types
-├── src-tauri/                  # Rust backend
-│   └── src/
-│       ├── commands/           # Tauri IPC handlers
-│       ├── db.rs               # SQLite schema, migrations, queries
-│       ├── lib.rs              # Tauri app setup
-│       └── main.rs             # Desktop entry point
-├── public/                     # Static assets
-├── CHANGELOG.md                # English changelog
-├── CHANGELOG.zh.md             # Chinese changelog
-└── release-notes/              # GitHub release notes
+## 常见问题
+
+### Q: 构建卡在 `Blocking waiting for file lock on build directory`
+
+**原因**：前一次 cargo 进程未正常退出，锁住了 build 目录。
+
+**解决**：
+```bash
+taskkill /F /IM cargo.exe
+taskkill /F /IM rustc.exe
+# 也可重启终端或任务管理器杀掉残留进程
 ```
 
-## Database
+### Q: `pnpm tauri build` 报错找不到 vcvars
 
-The SQLite database lives at `~/.skillsmanage/db.sqlite` and is initialized automatically on first launch.
+**原因**：未初始化 MSVC 编译环境。
 
-## Changelog
+**解决**：确保在 `pnpm tauri build` 之前执行过：
+```bash
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+```
 
-- English: [CHANGELOG.md](CHANGELOG.md)
-- Chinese: [CHANGELOG.zh.md](CHANGELOG.zh.md)
+### Q: Cargo 下载依赖极慢或失败
 
-## Contributing
+**原因**：国内网络访问 crates.io 不稳定。
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, validation commands, and pull request expectations.
+**解决**：配置清华或阿里云镜像（见上方[加速配置](#国内用户加速配置)）。
 
-## Community
+### Q: `tauri.conf.json` 中的构建标识符冲突
 
-Join the Discord community: <https://discord.gg/fuGURex5fV>
+**解决**：如果配置了 `"identifier": "com.skillsmanage.app"` 但编译报 bundle identifier 冲突，
+改为类似 `"identifier": "com.skillsmanage.dev"` 避免与已安装版本冲突。
 
-## Security
+### Q: 前端访问后端 IPC 返回空/错误
 
-See [SECURITY.md](SECURITY.md) for vulnerability reporting and data-handling notes.
+**原因**：Tauri dev 模式下前端需要通过 `invoke()` 调用后端命令。
+如果直接浏览器打开 `localhost:24200`（Vite 独立端口）而没启动 Tauri，IPC 不可用。
 
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=iamzhihuix/skills-manage&type=Date)](https://www.star-history.com/#iamzhihuix/skills-manage&Date)
-
-## License
-
-This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE).
+**正确做法**：使用 `pnpm tauri dev` 启动完整应用，或 `pnpm dev` + `pnpm tauri` 分离运行时。
