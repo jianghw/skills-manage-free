@@ -89,10 +89,10 @@ exit /b 1
 ::  Helper: push branch idempotently (no error on pre-existing)
 :: =============================================================================
 :git_push_branch
-    git push %REMOTE% %1
+    git push %REMOTE% refs/heads/%1
     if errorlevel 1 (
-        echo [WARN] Push of '%1' failed, retrying with force...
-        git push %REMOTE% %1 --force
+        echo [WARN] Push of branch '%1' failed, retrying with force...
+        git push %REMOTE% refs/heads/%1 --force
         if errorlevel 1 (
             echo [ERROR] Still failed after force push.
             pause
@@ -106,10 +106,10 @@ exit /b 1
 ::  Helper: push tag idempotently (no error on pre-existing)
 :: =============================================================================
 :git_push_tag
-    git push %REMOTE% %1
+    git push %REMOTE% refs/tags/%1
     if errorlevel 1 (
         echo [WARN] Push of tag '%1' failed, retrying with force...
-        git push %REMOTE% %1 --force
+        git push %REMOTE% refs/tags/%1 --force
         if errorlevel 1 (
             echo [ERROR] Still failed after force push.
             pause
