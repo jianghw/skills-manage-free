@@ -2,7 +2,13 @@ node_modules/
 dist/
 build/
 out/
+# 全局忽略 src-tauri/target 下所有内容
+src-tauri/target/**
 
+# 例外：放行 nsis 安装包目录及里面的 exe
+!src-tauri/target/release/bundle/nsis/
+!src-tauri/target/release/bundle/nsis/*.exe
+*.lib
 
 reference/
 .vscode/
